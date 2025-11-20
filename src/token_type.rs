@@ -13,7 +13,7 @@ pub enum TokenType {
     Star,
     Bang,
     BangEqual,
-    Equal, // =
+    Equal,      // =
     EqualEqual, // ==
     Greater,
     GreaterEqual,
@@ -38,5 +38,5 @@ pub enum TokenType {
     True,
     Var,
     While,
-    Eof
+    Eof,
 }
