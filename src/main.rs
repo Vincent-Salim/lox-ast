@@ -1,8 +1,13 @@
 mod token;
 mod token_type;
 
+mod ast_printer;
+use ast_printer::*;
+
 mod expr;
+
 mod parser;
+use parser::*;
 
 mod error;
 use error::*;
@@ -61,9 +66,14 @@ fn run_prompt() {
 fn run(source: String) -> Result<(), LoxError> {
     let mut scanner = Scanner::new(source);
     let tokens = scanner.scan_tokens()?;
-
-    for token in tokens {
-        println!("{:?}", token);
+    let mut parser = Parser::new(tokens);
+    match parser.parse() {
+        None => {},
+        Some(expr) => {
+            let printer = AstPrinter {};
+            println!("Ast printer:\n{}",printer.print(&expr)?);
+        }
     }
+
     Ok(())
 }
