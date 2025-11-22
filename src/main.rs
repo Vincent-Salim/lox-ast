@@ -1,6 +1,9 @@
 mod token;
 mod token_type;
 
+mod expr;
+mod parser;
+
 mod error;
 use error::*;
 
