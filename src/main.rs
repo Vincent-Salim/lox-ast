@@ -6,6 +6,10 @@ use ast_printer::*;
 
 mod expr;
 
+mod interpreter;
+
+mod object;
+
 mod parser;
 use parser::*;
 
@@ -68,10 +72,10 @@ fn run(source: String) -> Result<(), LoxError> {
     let tokens = scanner.scan_tokens()?;
     let mut parser = Parser::new(tokens);
     match parser.parse() {
-        None => {},
+        None => {}
         Some(expr) => {
             let printer = AstPrinter {};
-            println!("Ast printer:\n{}",printer.print(&expr)?);
+            println!("Ast printer:\n{}", printer.print(&expr)?);
         }
     }
 
