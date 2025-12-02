@@ -18,25 +18,54 @@ impl ExprVisitor<Object> for Interpreter {
     fn visit_binary_expr(&self, expr: &BinaryExpr) -> Result<Object, LoxError> {
         let left = self.evaluate(&expr.left)?;
         let right = self.evaluate(&expr.right)?;
+        let op = expr.operator.token_type();
 
-        let result = match expr.operator.token_type() {
-            TokenType::Minus => left - right,
-            TokenType::Slash => left / right,
-            TokenType::Star => left * right,
-            TokenType::Plus => left + right,
-            TokenType::Greater => Object::Bool(left > right),
-            TokenType::GreaterEqual => Object::Bool(left >= right),
-            TokenType::Less => Object::Bool(left < right),
-            TokenType::LessEqual => Object::Bool(left <= right),
-            TokenType::BangEqual=> Object::Bool(left != right),
-            TokenType::EqualEqual=> Object::Bool(left == right),
-            _ => {
-                todo!("need to be written");
-            }
+        let result = match (left, right) {
+            (Object::Num(left), Object::Num(right)) => match op {
+                TokenType::Minus => Object::Num(left - right),
+                TokenType::Slash => Object::Num(left / right),
+                TokenType::Star => Object::Num(left * right),
+                TokenType::Plus => Object::Num(left + right),
+                TokenType::Greater => Object::Bool(left > right),
+                TokenType::GreaterEqual => Object::Bool(left >= right),
+                TokenType::Less => Object::Bool(left < right),
+                TokenType::LessEqual => Object::Bool(left <= right),
+                TokenType::BangEqual => Object::Bool(left != right),
+                TokenType::EqualEqual => Object::Bool(left == right),
+                _ => {
+                    todo!("need to be written");
+                }
+            },
+            (Object::Str(left), Object::Str(right)) => match op {
+                TokenType::Plus => Object::Str(format!("{left}{right}")),
+                TokenType::BangEqual => Object::Bool(left != right),
+                TokenType::EqualEqual => Object::Bool(left == right),
+                _ => Object::ArithmeticError,
+            },
+            (Object::Bool(left), Object::Bool(right)) => match op {
+                TokenType::Plus => Object::Str(format!("{left}{right}")),
+                TokenType::BangEqual => Object::Bool(left != right),
+                TokenType::EqualEqual => Object::Bool(left == right),
+                _ => Object::ArithmeticError,
+            },
+            (Object::Nil, Object::Nil) => match op {
+                TokenType::BangEqual => Object::Bool(false),
+                TokenType::EqualEqual => Object::Bool(true),
+                _ => Object::ArithmeticError,
+            },
+            (Object::Nil, _) => match op {
+                TokenType::BangEqual => Object::Bool(true),
+                TokenType::EqualEqual => Object::Bool(false),
+                _ => Object::ArithmeticError,
+            },
+            _ => Object::ArithmeticError,
         };
 
         if result == Object::ArithmeticError {
-            Err(LoxError::error(expr.operator.line, "Illegal expression"))
+            Err(LoxError::runtime_error(
+                &expr.operator,
+                "Illegal expression",
+            ))
         } else {
             Ok(result)
         }
@@ -195,6 +224,18 @@ mod tests {
     }
 
     #[test]
+    fn test_arithmetic_error_for_greater() {
+        let terp = Interpreter {};
+        let binary_expr = BinaryExpr {
+            left: make_literal_number(15.0),
+            operator: Token::new(TokenType::Greater, ">".to_string(), None, 123),
+            right: make_literal_boolean(true),
+        };
+        let result = terp.visit_binary_expr(&binary_expr);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_arithmetic_error_for_subtraction() {
         let terp = Interpreter {};
         let binary_expr = BinaryExpr {
@@ -206,69 +247,74 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_greater_than_true() {
+    fn run_comparison_test(tok: &Token, cmps: Vec<bool>) {
+        let nums = vec![14.0, 15.0, 16.0];
         let terp = Interpreter {};
-        let binary_expr = BinaryExpr {
-            left: make_literal_number(15.0),
-            operator: Token::new(TokenType::Greater, ">".to_string(), None, 123),
-            right: make_literal_number(10.0),
-        };
-        let result = terp.visit_binary_expr(&binary_expr);
-        assert!(result.is_ok());
-        assert_eq!(result.ok(), Some(Object::Bool(true)));
+
+        for (c, nums) in cmps.iter().zip(nums) {
+            let binary_expr = BinaryExpr {
+                left: make_literal_number(nums),
+                operator: tok.dup(),
+                right: make_literal_number(15.0),
+            };
+            let result = terp.visit_binary_expr(&binary_expr);
+            assert!(result.is_ok());
+            assert_eq!(
+                result.ok(),
+                Some(Object::Bool(*c)),
+                "Testing {} {} 15.0",
+                nums,
+                tok.as_string()
+            );
+        }
     }
 
     #[test]
-    fn test_greater_than_false() {
-        let terp = Interpreter {};
-        let binary_expr = BinaryExpr {
-            left: make_literal_number(15.0),
-            operator: Token::new(TokenType::Greater, ">".to_string(), None, 123),
-            right: make_literal_number(17.0),
-        };
-        let result = terp.visit_binary_expr(&binary_expr);
-        assert!(result.is_ok());
-        assert_eq!(result.ok(), Some(Object::Bool(false)));
+    fn test_less_than() {
+        run_comparison_test(
+            &Token::new(TokenType::Less, "<".to_string(), None, 123),
+            vec![true, false, false],
+        );
+    }
+
+    #[test]
+    fn test_less_than_or_equal_to() {
+        run_comparison_test(
+            &Token::new(TokenType::LessEqual, "<=".to_string(), None, 123),
+            vec![true, true, false],
+        );
+    }
+
+    #[test]
+    fn test_greater_than() {
+        run_comparison_test(
+            &Token::new(TokenType::Greater, ">".to_string(), None, 123),
+            vec![false, false, true],
+        );
     }
 
     #[test]
     fn test_greater_than_equal_to() {
-        let terp = Interpreter {};
-        let binary_expr = BinaryExpr {
-            left: make_literal_number(15.0),
-            operator: Token::new(TokenType::GreaterEqual, ">=".to_string(), None, 123),
-            right: make_literal_number(15.0),
-        };
-        let result = terp.visit_binary_expr(&binary_expr);
-        assert!(result.is_ok());
-        assert_eq!(result.ok(), Some(Object::Bool(true)));
+        run_comparison_test(
+            &Token::new(TokenType::GreaterEqual, ">=".to_string(), None, 123),
+            vec![false, true, true],
+        );
     }
 
     #[test]
-    fn test_equals() {
-        let terp = Interpreter {};
-        let binary_expr = BinaryExpr {
-            left: make_literal_number(15.0),
-            operator: Token::new(TokenType::EqualEqual, "==".to_string(), None, 123),
-            right: make_literal_number(15.0),
-        };
-        let result = terp.visit_binary_expr(&binary_expr);
-        assert!(result.is_ok());
-        assert_eq!(result.ok(), Some(Object::Bool(true)));
+    fn test_equals_num() {
+        run_comparison_test(
+            &Token::new(TokenType::EqualEqual, "==".to_string(), None, 123),
+            vec![false, true, false],
+        );
     }
 
     #[test]
-    fn test_not_equals() {
-        let terp = Interpreter {};
-        let binary_expr = BinaryExpr {
-            left: make_literal_number(15.0),
-            operator: Token::new(TokenType::BangEqual, "!=".to_string(), None, 123),
-            right: make_literal_number(16.0),
-        };
-        let result = terp.visit_binary_expr(&binary_expr);
-        assert!(result.is_ok());
-        assert_eq!(result.ok(), Some(Object::Bool(true)));
+    fn test_not_equals_num() {
+        run_comparison_test(
+            &Token::new(TokenType::BangEqual, "!=".to_string(), None, 123),
+            vec![true, false, true],
+        );
     }
 
     #[test]
