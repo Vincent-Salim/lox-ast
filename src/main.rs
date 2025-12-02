@@ -23,18 +23,13 @@ use scanner::*;
 use std::env::args;
 use std::io::{self, BufRead, Write, stdout};
 
-
 pub fn main() {
     let args: Vec<String> = args().collect();
     let lox = Lox::new();
 
     match args.len() {
-        1 => {
-            lox.run_prompt();
-        }
-        2 => {
-            lox.run_file(&args[1]).expect("Could not run file");
-        }
+        1 => lox.run_prompt(),
+        2 => lox.run_file(&args[1]).expect("Could not run file"),
         _ => {
             println!("Usage: lox-ast [script]");
             std::process::exit(64);

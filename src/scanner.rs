@@ -119,10 +119,7 @@ impl Scanner {
                 self.identifier();
             }
             _ => {
-                return Err(LoxError::error(
-                    self.line,
-                    "Unexpected character",
-                ));
+                return Err(LoxError::error(self.line, "Unexpected character"));
             }
         }
 
@@ -143,6 +140,10 @@ impl Scanner {
     }
 
     fn number(&mut self) {
+        while Scanner::is_digit(self.peek()) {
+            self.advance();
+        }
+
         if self.peek() == Some('.') && Scanner::is_digit(self.peek_next()) {
             if Scanner::is_digit(self.peek_next()) {
                 self.advance();
@@ -189,10 +190,7 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            return Err(LoxError::error(
-                self.line,
-                "Unterminated string.",
-            ));
+            return Err(LoxError::error(self.line, "Unterminated string."));
         }
 
         self.advance();

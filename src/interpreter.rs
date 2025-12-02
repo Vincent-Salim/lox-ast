@@ -36,6 +36,14 @@ impl ExprVisitor<Object> for Interpreter {
                     todo!("need to be written");
                 }
             },
+            (Object::Num(left), Object::Str(right)) => match op {
+                TokenType::Plus => Object::Str(format!("{left}{right}")),
+                _ => Object::ArithmeticError,
+            }
+            (Object::Str(left), Object::Num(right)) => match op {
+                TokenType::Plus => Object::Str(format!("{left}{right}")),
+                _ => Object::ArithmeticError,
+            }
             (Object::Str(left), Object::Str(right)) => match op {
                 TokenType::Plus => Object::Str(format!("{left}{right}")),
                 TokenType::BangEqual => Object::Bool(left != right),
