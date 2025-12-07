@@ -1,30 +1,53 @@
 use crate::error::*;
 use crate::expr::*;
 use crate::object::*;
+use crate::stmt::*;
 use crate::token::*;
 use crate::token_type::*;
-use crate::stmt::*;
 
 pub struct Parser<'a> {
-    tokens: &'a Vec<Token>,
+    tokens: &'a [Token],
     current: usize,
+    had_error: bool,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(tokens: &Vec<Token>) -> Parser<'_> {
-        Parser { tokens, current: 0 }
+    pub fn new(tokens: &[Token]) -> Parser<'_> {
+        Parser {
+            tokens,
+            current: 0,
+            had_error: false,
+        }
     }
 
     pub fn parse(&mut self) -> Result<Vec<Stmt>, LoxError> {
         let mut statements = Vec::new();
         while !self.is_at_end() {
-            statements.push(self.statement()?);
+            statements.push(self.declaration()?);
         }
         Ok(statements)
     }
 
+    pub fn success(&self) -> bool {
+        !self.had_error
+    }
+
     fn expression(&mut self) -> Result<Expr, LoxError> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn declaration(&mut self) -> Result<Stmt, LoxError> {
+        let result = if self.is_match(&[TokenType::Var]) {
+            self.var_declaration()
+        } else {
+            self.statement()
+        };
+
+        if result.is_err() {
+            self.synchronize();
+        }
+
+        result
     }
 
     fn statement(&mut self) -> Result<Stmt, LoxError> {
@@ -38,23 +61,56 @@ impl<'a> Parser<'a> {
     fn print_statement(&mut self) -> Result<Stmt, LoxError> {
         let value = self.expression()?;
         self.consume(TokenType::SemiColon, "Expect ';' after value.")?;
-        Ok(Stmt::Print(PrintStmt {
-            expression: value
-        }))
+        Ok(Stmt::Print(PrintStmt { expression: value }))
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt, LoxError> {
+        let name = self.consume(TokenType::Identifier, "Expect variable name")?;
+
+        let initializer = if self.is_match(&[TokenType::Equal]) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(
+            TokenType::SemiColon,
+            "Expect ';' after variable declaration.",
+        )?;
+
+        Ok(Stmt::Var(VarStmt { name, initializer }))
     }
 
     fn expression_statement(&mut self) -> Result<Stmt, LoxError> {
         let expr = self.expression()?;
         self.consume(TokenType::SemiColon, "Expect ';' after value.")?;
-        Ok(Stmt::Expression(ExpressionStmt {
-            expression: expr
-        }))
+        Ok(Stmt::Expression(ExpressionStmt { expression: expr }))
+    }
+
+    fn assignment(&mut self) -> Result<Expr, LoxError> {
+        let expr = self.equality()?;
+
+        if self.is_match(&[TokenType::Equal]) {
+            let equals = self.previous().dup();
+            let value = self.assignment()?;
+
+            if let Expr::Variable(expr) = expr {
+                return Ok(Expr::Assign(AssignExpr {
+                    name: expr.name.dup(),
+                    value: Box::new(value),
+                }));
+            }
+
+            self.error(&equals, "Invalid assignment target.");
+        }
+
+        Ok(expr)
     }
 
     fn equality(&mut self) -> Result<Expr, LoxError> {
         let mut expr = self.comparison()?;
 
-        while self.is_match(&[TokenType::BangEqual, TokenType::Equal]) {
+        while self.is_match(&[TokenType::BangEqual, TokenType::EqualEqual]) {
             let operator = self.previous().dup();
             let right = self.comparison()?;
             expr = Expr::Binary(BinaryExpr {
@@ -128,7 +184,7 @@ impl<'a> Parser<'a> {
             }));
         }
 
-        Ok(self.primary()?)
+        self.primary()
     }
 
     fn primary(&mut self) -> Result<Expr, LoxError> {
@@ -152,12 +208,15 @@ impl<'a> Parser<'a> {
                 value: self.previous().literal.clone(),
             }));
         }
+
+        if self.is_match(&[TokenType::Identifier]) {
+            return Ok(Expr::Variable(VariableExpr {
+                name: self.previous().dup(),
+            }));
+        }
         if self.is_match(&[TokenType::LeftParen]) {
             let expr = self.expression()?;
-            self.consume(
-                TokenType::RightParen,
-                "Expect ')' after expression",
-            )?;
+            self.consume(TokenType::RightParen, "Expect ')' after expression")?;
             return Ok(Expr::Grouping(GroupingExpr {
                 expression: Box::new(expr),
             }));
@@ -170,11 +229,13 @@ impl<'a> Parser<'a> {
         if self.check(ttype) {
             Ok(self.advance().dup())
         } else {
-            Err(Parser::error(self.peek(), message))
+            let peek = self.peek().dup();
+            Err(self.error(&peek, message))
         }
     }
 
-    fn error(token: &Token, message: &str) -> LoxError {
+    fn error(&mut self, token: &Token, message: &str) -> LoxError {
+        self.had_error = true;
         LoxError::parse_error(token, message)
     }
 

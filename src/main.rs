@@ -8,10 +8,12 @@ mod expr;
 
 mod stmt;
 
-mod interpreter;
-use interpreter::*;
+mod environment;
 
 mod object;
+
+mod interpreter;
+use interpreter::*;
 
 mod parser;
 use parser::*;
@@ -46,7 +48,7 @@ struct Lox {
 impl Lox {
     pub fn new() -> Lox {
         Lox {
-            interpreter: Interpreter {},
+            interpreter: Interpreter::new(),
         }
     }
     pub fn run_file(&self, path: &str) -> io::Result<()> {
@@ -83,7 +85,7 @@ impl Lox {
         let mut parser = Parser::new(tokens);
         let statements = parser.parse()?;
 
-        if self.interpreter.interpret(&statements) {
+        if parser.success() && self.interpreter.interpret(&statements) {
             Ok(())
         } else {
             Err(LoxError::error(0, ""))

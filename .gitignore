@@ -22,4 +22,5 @@ target
 
 # These files are automatically generated
 src/expr.rs
+src/stmt.rs
 *.lox
